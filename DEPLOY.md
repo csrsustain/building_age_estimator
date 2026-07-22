@@ -31,11 +31,14 @@ end.
 3. **Before clicking Deploy**, open "Advanced settings" -> "Secrets" and
    paste in:
    ```
-   OS_API_KEY = "your-actual-key-here"
+   OS_API_KEY = "your-actual-os-key-here"
+   GOOGLE_API_KEY = "your-actual-google-key-here"
    ```
-   This is the ONLY place your key needs to live now — it's stored
-   securely by Streamlit, never shown to anyone using the app, and never
-   sits in your GitHub repo's code.
+   GOOGLE_API_KEY is optional but recommended — it gives much better
+   address-matching precision than the free fallback (Nominatim), which
+   can sometimes only match a street rather than the exact building. Both
+   keys are stored securely by Streamlit, never shown to anyone using the
+   app, and never sit in your GitHub repo's code.
 4. Click Deploy.
 
 ## Step 3: Share the link

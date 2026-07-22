@@ -18,16 +18,18 @@ st.write(
     "age, sourced from Ordnance Survey's building database."
 )
 
-# API key comes from Streamlit secrets — set once when you deploy, never
+# API keys come from Streamlit secrets — set once when you deploy, never
 # visible to anyone using the app.
 try:
     OS_API_KEY = st.secrets["OS_API_KEY"]
 except Exception:
     st.error(
-        "No API key configured. If you're the app owner: add OS_API_KEY in "
+        "No OS API key configured. If you're the app owner: add OS_API_KEY in "
         "your Streamlit Cloud app's Settings -> Secrets."
     )
     st.stop()
+
+GOOGLE_API_KEY = st.secrets.get("GOOGLE_API_KEY")  # optional — improves accuracy if set
 
 with st.form("lookup_form"):
     address = st.text_input("Address", placeholder="e.g. 124 Commercial Street")
@@ -39,9 +41,11 @@ if submitted:
         st.warning("Please enter both an address and a postcode.")
     else:
         with st.spinner("Looking up..."):
-            result = estimate_building_age(address, postcode, OS_API_KEY)
+            result = estimate_building_age(address, postcode, OS_API_KEY, GOOGLE_API_KEY)
 
         if result.get("estimated_age"):
+            if result.get("confidence") == "low":
+                st.warning(result.get("note", "Low confidence match."))
             st.success(f"Estimated age: **{result['estimated_age']}**")
             col1, col2 = st.columns(2)
             col1.metric("Confidence", result["confidence"])
