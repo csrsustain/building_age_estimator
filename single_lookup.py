@@ -26,23 +26,29 @@ _BUFFER_DEG = 0.00015
 
 def _get_coords(address: str, postcode: str, os_api_key: str, google_api_key: str = None):
     """Try each geocoding tier in order of precision, return
-    (lon, lat, method_description, is_precise_building_match)."""
+    (lon, lat, method_description, is_precise_building_match, debug_log)."""
+    debug_log = []
+
     try:
         match = geocode_address(address, postcode, os_api_key)
         if match:
+            debug_log.append("OS Places: SUCCESS")
             return (
                 match["lon"],
                 match["lat"],
                 f"OS Places (match score: {match['match_score']}, matched: {match['matched_address']})",
                 True,
+                debug_log,
             )
+        debug_log.append("OS Places: no match returned (empty result)")
     except Exception as e:
-        print(f"[info] OS Places unavailable ({e}), trying Google...")
+        debug_log.append(f"OS Places: FAILED — {e}")
 
     if google_api_key:
         try:
             match = geocode_address_google(address, postcode, google_api_key)
             if match:
+                debug_log.append(f"Google: SUCCESS (location_type={match['location_type']})")
                 precision_note = (
                     "exact building (ROOFTOP)" if match["is_precise"] else f"approximate ({match['location_type']})"
                 )
@@ -51,18 +57,18 @@ def _get_coords(address: str, postcode: str, os_api_key: str, google_api_key: st
                     match["lat"],
                     f"Google ({precision_note}) — matched: {match['formatted_address']}",
                     match["is_precise"],
+                    debug_log,
                 )
+            debug_log.append("Google: no match returned (empty result)")
         except Exception as e:
-            print(f"[info] Google Geocoding unavailable ({e}), trying Nominatim...")
+            debug_log.append(f"Google: FAILED — {e}")
+    else:
+        debug_log.append("Google: skipped (no API key provided)")
 
     try:
         match = geocode_address_nominatim(address, postcode)
         if match:
-            if not match.get("matched_exact_building"):
-                print(
-                    f"[warn] Nominatim only matched street-level, not the exact building: "
-                    f"{match['display_name']}"
-                )
+            debug_log.append(f"Nominatim: SUCCESS (exact_building={match.get('matched_exact_building')})")
             precision_note = (
                 "exact building match" if match.get("matched_exact_building") else "STREET-LEVEL ONLY, not the exact building"
             )
@@ -71,21 +77,25 @@ def _get_coords(address: str, postcode: str, os_api_key: str, google_api_key: st
                 match["lat"],
                 f"Nominatim/OSM ({precision_note}) — matched: {match['display_name']}",
                 match.get("matched_exact_building", False),
+                debug_log,
             )
+        debug_log.append("Nominatim: no match returned (empty result)")
     except Exception as e:
-        print(f"[info] Nominatim unavailable ({e}), falling back to postcode centroid...")
+        debug_log.append(f"Nominatim: FAILED — {e}")
 
     coords = geocode_postcode(postcode)
     if coords:
-        return coords[0], coords[1], "postcode centroid (least precise fallback)", False
+        debug_log.append("Postcode centroid: SUCCESS (last-resort fallback)")
+        return coords[0], coords[1], "postcode centroid (least precise fallback)", False, debug_log
 
-    return None, None, None, False
+    debug_log.append("Postcode centroid: FAILED — could not geocode postcode at all")
+    return None, None, None, False, debug_log
 
 
 def estimate_building_age(address: str, postcode: str, os_api_key: str, google_api_key: str = None) -> dict:
     """Look up one property live: geocode (best available method) -> OS
     NGD building age lookup around that point."""
-    lon, lat, geocode_method, is_precise = _get_coords(address, postcode, os_api_key, google_api_key)
+    lon, lat, geocode_method, is_precise, debug_log = _get_coords(address, postcode, os_api_key, google_api_key)
 
     if lon is None:
         return {
@@ -94,6 +104,7 @@ def estimate_building_age(address: str, postcode: str, os_api_key: str, google_a
             "estimated_age": None,
             "confidence": "none",
             "note": "Could not geocode this address or postcode via any method.",
+            "debug_log": debug_log,
         }
 
     min_x, max_x = lon - _BUFFER_DEG, lon + _BUFFER_DEG
@@ -123,6 +134,7 @@ def estimate_building_age(address: str, postcode: str, os_api_key: str, google_a
                 "source": signal["source"],
                 "provenance": signal.get("age_source"),
                 "note": note,
+                "debug_log": debug_log,
             }
 
     return {
@@ -132,4 +144,5 @@ def estimate_building_age(address: str, postcode: str, os_api_key: str, google_a
         "estimated_age": None,
         "confidence": "none",
         "note": "No OS NGD building age record found for this location.",
+        "debug_log": debug_log,
     }

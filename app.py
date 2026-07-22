@@ -57,6 +57,10 @@ if submitted:
             st.info("No age data found for this address.")
             st.caption(result.get("note", ""))
 
+        with st.expander("Debug: what happened during geocoding"):
+            for line in result.get("debug_log", []):
+                st.text(line)
+
 st.divider()
 st.caption(
     "Prototype tool — building age estimates are sourced from third-party "
